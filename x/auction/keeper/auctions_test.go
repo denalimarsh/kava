@@ -16,7 +16,103 @@ import (
 	"github.com/kava-labs/kava/x/liquidator"
 )
 
-func TestForwardAuctionBasic(t *testing.T) {
+// ----------------------------------------------------
+// 					Forward Auctions
+// 		1. Starting. 2. Execute basic. 3. Bidding.
+// ----------------------------------------------------
+func TestStartForwardAuction(t *testing.T) {
+	someTime := time.Date(1998, time.January, 1, 0, 0, 0, 0, time.UTC)
+
+	// Set up ForwardAuction params
+	type args struct {
+		seller   string
+		lot      sdk.Coin
+		bidDenom string
+	}
+
+	// Set up ForwardAuction test cases
+	testCases := []struct {
+		name       string
+		blockTime  time.Time
+		args       args
+		expectPass bool
+	}{
+		{
+			"normal",
+			someTime,
+			args{liquidator.ModuleName, c("stable", 10), "gov"},
+			true,
+		},
+		{
+			"no module account",
+			someTime,
+			args{"nonExistentModule", c("stable", 10), "gov"},
+			false,
+		},
+		{
+			"not enough coins",
+			someTime,
+			args{liquidator.ModuleName, c("stable", 101), "gov"},
+			false,
+		},
+		{
+			"incorrect denom",
+			someTime,
+			args{liquidator.ModuleName, c("notacoin", 10), "gov"},
+			false,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Set up
+			initialLiquidatorCoins := cs(c("stable", 100))
+			liqAcc := supply.NewEmptyModuleAccount(liquidator.ModuleName, supply.Burner) // TODO: could add test to check for burner permissions
+			require.NoError(t, liqAcc.SetCoins(initialLiquidatorCoins))
+
+			tApp := app.NewTestApp()
+
+			tApp.InitializeFromGenesisStates(
+				NewAuthGenStateFromAccs(authexported.GenesisAccounts{liqAcc}),
+			)
+			ctx := tApp.NewContext(false, abci.Header{}).WithBlockTime(tc.blockTime)
+			keeper := tApp.GetAuctionKeeper()
+
+			// Execute StartForwardAuction under test
+			id, err := keeper.StartForwardAuction(ctx, tc.args.seller, tc.args.lot, tc.args.bidDenom)
+
+			// Get the stored auction and Liquidator module's current coins
+			sk := tApp.GetSupplyKeeper()
+			liquidatorCoins := sk.GetModuleAccount(ctx, liquidator.ModuleName).GetCoins()
+			actualAuc, found := keeper.GetAuction(ctx, id)
+
+			if tc.expectPass {
+				require.NoError(t, err)
+				// Check coins moved
+				require.Equal(t, initialLiquidatorCoins.Sub(cs(tc.args.lot)), liquidatorCoins)
+				// Check auction in store and is correct
+				require.True(t, found)
+				expectedAuction := types.Auction(types.ForwardAuction{BaseAuction: types.BaseAuction{
+					ID:         0,
+					Initiator:  tc.args.seller,
+					Lot:        tc.args.lot,
+					Bidder:     nil,
+					Bid:        c(tc.args.bidDenom, 0),
+					EndTime:    tc.blockTime.Add(types.DefaultMaxAuctionDuration),
+					MaxEndTime: tc.blockTime.Add(types.DefaultMaxAuctionDuration),
+				}})
+				require.Equal(t, expectedAuction, actualAuc)
+			} else {
+				require.Error(t, err)
+				// Check coins not moved
+				require.Equal(t, initialLiquidatorCoins, liquidatorCoins)
+				// Check auction not in store
+				require.False(t, found)
+			}
+		})
+	}
+}
+
+func TestExecuteBasicForwardAuction(t *testing.T) {
 	// Setup
 	_, addrs := app.GeneratePrivKeyAddressPairs(1)
 	buyer := addrs[0]
@@ -56,8 +152,122 @@ func TestForwardAuctionBasic(t *testing.T) {
 	tApp.CheckBalance(t, ctx, buyer, cs(c("token1", 120), c("token2", 90)))
 }
 
-func TestReverseAuctionBasic(t *testing.T) {
-	// Setup
+func TestForwardAuctionBidding(t *testing.T) {
+	// TODO: Implement TestForwardAuctionBidding with error edge cases
+}
+
+// ----------------------------------------------------
+// 					Reverse Auctions
+// 		1. Starting. 2. Execute basic. 3. Bidding.
+// ----------------------------------------------------
+func TestStartReverseAuction(t *testing.T) {
+	// Set up ReverseAuction params
+	type args struct {
+		buyer      string
+		bid        sdk.Coin
+		initialLot sdk.Coin
+	}
+
+	// Set up ReverseAuction test cases
+	testCases := []struct {
+		name       string
+		args       args
+		expectPass bool
+	}{
+		{
+			"normal",
+			args{liquidator.ModuleName, c("token1", 10), c("token2", 99999)},
+			true,
+		},
+		// TODO: Add starting ReverseAuction error edge cases
+		// {
+		// 	"no module account",
+		// 	args{"nonExistentModule", c("token1", 10), c("token2", 99999)},
+		// 	false,
+		// },
+		// {
+		// 	"not enough coins",
+		// 	args{liquidator.ModuleName, c("token1", 101), c("token2", 99999)},
+		// 	false,
+		// },
+		// {
+		// 	"incorrect bid denom",
+		// 	args{liquidator.ModuleName, c("wrong_denom", 10), c("token2", 99999)},
+		// 	false,
+		// },
+		// 	"incorrect lot denom",
+		// 	args{liquidator.ModuleName, c("token1", 10), c("wrong_denom", 99999)},
+		// 	false,
+		// },
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Set up seller
+			_, addrs := app.GeneratePrivKeyAddressPairs(1)
+			seller := addrs[0]
+
+			// Set up buyer (Liquidator module account)
+			buyerModName := liquidator.ModuleName
+			buyerAddr := supply.NewModuleAddress(buyerModName)
+			buyerAcc := supply.NewEmptyModuleAccount(buyerModName, supply.Minter) // Reverse auctions mint payout
+
+			// Set up initial module coins
+			initialLiquidatorCoins := cs(
+				c("token1", 100),
+				c("token2", 100),
+			)
+
+			tApp := app.NewTestApp()
+
+			tApp.InitializeFromGenesisStates(
+				NewAuthGenStateFromAccs(authexported.GenesisAccounts{
+					auth.NewBaseAccount(seller, initialLiquidatorCoins, nil, 0, 0),
+					buyerAcc,
+				}),
+			)
+			ctx := tApp.NewContext(false, abci.Header{})
+			keeper := tApp.GetAuctionKeeper()
+
+			// Start auction under test
+			auctionID, err := keeper.StartReverseAuction(ctx, tc.args.buyer, tc.args.bid, tc.args.initialLot)
+
+			// Get stored auction and Liquidator module's current coins
+			// TODO: Coin count
+			// sk := tApp.GetSupplyKeeper()
+			// liquidatorCoins := sk.GetModuleAccount(ctx, liquidator.ModuleName).GetCoins()
+			actualAuc, found := keeper.GetAuction(ctx, auctionID)
+
+			if tc.expectPass {
+				require.NoError(t, err)
+				// TODO: Check coins moved
+				// require.Equal(t, initialLiquidatorCoins.Sub(cs(tc.args.initialLot)), liquidatorCoins)
+
+				// Check auction in store and is correct
+				require.True(t, found)
+				expectedAuction := types.Auction(types.ReverseAuction{BaseAuction: types.BaseAuction{
+					ID:         0,
+					Initiator:  tc.args.buyer,
+					Lot:        tc.args.initialLot,
+					Bidder:     buyerAddr,
+					Bid:        tc.args.bid,
+					EndTime:    ctx.BlockTime().Add(types.DefaultMaxAuctionDuration),
+					MaxEndTime: ctx.BlockTime().Add(types.DefaultMaxAuctionDuration),
+				}})
+				require.Equal(t, expectedAuction, actualAuc)
+			} else {
+				require.Error(t, err)
+				// TODO: Check coins not moved
+				// require.Equal(t, initialLiquidatorCoins, liquidatorCoins)
+
+				// check auction not in store
+				require.False(t, found)
+			}
+		})
+	}
+}
+
+func TestExecuteBasicReverseAuction(t *testing.T) {
+	// Set up
 	_, addrs := app.GeneratePrivKeyAddressPairs(1)
 	seller := addrs[0]
 	buyerModName := liquidator.ModuleName
@@ -68,7 +278,7 @@ func TestReverseAuctionBasic(t *testing.T) {
 	tApp.InitializeFromGenesisStates(
 		NewAuthGenStateFromAccs(authexported.GenesisAccounts{
 			auth.NewBaseAccount(seller, cs(c("token1", 100), c("token2", 100)), nil, 0, 0),
-			supply.NewEmptyModuleAccount(buyerModName, supply.Minter), // reverse auctions mint payout
+			supply.NewEmptyModuleAccount(buyerModName, supply.Minter), // Reverse auctions mint payout
 		}),
 	)
 	ctx := tApp.NewContext(false, abci.Header{})
@@ -94,7 +304,19 @@ func TestReverseAuctionBasic(t *testing.T) {
 	tApp.CheckBalance(t, ctx, seller, cs(c("token1", 80), c("token2", 110)))
 }
 
-func TestForwardReverseAuctionBasic(t *testing.T) {
+func TestReverseAuctionBidding(t *testing.T) {
+	// TODO: Implement TestReverseAuctionBidding with error edge cases
+}
+
+// ----------------------------------------------------
+// 					Reverse Auctions
+// 		1. Starting. 2. Execute basic. 3. Bidding.
+// ----------------------------------------------------
+func TestStartForwardReverseAuction(t *testing.T) {
+	// TODO: Implement TestStartForwardReverseAuction
+}
+
+func TestExecuteBasicForwardReverseAuction(t *testing.T) {
 	// Setup
 	_, addrs := app.GeneratePrivKeyAddressPairs(4)
 	buyer := addrs[0]
@@ -153,89 +375,6 @@ func TestForwardReverseAuctionBasic(t *testing.T) {
 	tApp.CheckBalance(t, ctx, buyer, cs(c("token1", 115), c("token2", 50)))
 }
 
-func TestStartForwardAuction(t *testing.T) {
-	someTime := time.Date(1998, time.January, 1, 0, 0, 0, 0, time.UTC)
-	type args struct {
-		seller   string
-		lot      sdk.Coin
-		bidDenom string
-	}
-	testCases := []struct {
-		name       string
-		blockTime  time.Time
-		args       args
-		expectPass bool
-	}{
-		{
-			"normal",
-			someTime,
-			args{liquidator.ModuleName, c("stable", 10), "gov"},
-			true,
-		},
-		{
-			"no module account",
-			someTime,
-			args{"nonExistentModule", c("stable", 10), "gov"},
-			false,
-		},
-		{
-			"not enough coins",
-			someTime,
-			args{liquidator.ModuleName, c("stable", 101), "gov"},
-			false,
-		},
-		{
-			"incorrect denom",
-			someTime,
-			args{liquidator.ModuleName, c("notacoin", 10), "gov"},
-			false,
-		},
-	}
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			// setup
-			initialLiquidatorCoins := cs(c("stable", 100))
-			tApp := app.NewTestApp()
-
-			liqAcc := supply.NewEmptyModuleAccount(liquidator.ModuleName, supply.Burner) // TODO could add test to check for burner permissions
-			require.NoError(t, liqAcc.SetCoins(initialLiquidatorCoins))
-			tApp.InitializeFromGenesisStates(
-				NewAuthGenStateFromAccs(authexported.GenesisAccounts{liqAcc}),
-			)
-			ctx := tApp.NewContext(false, abci.Header{}).WithBlockTime(tc.blockTime)
-			keeper := tApp.GetAuctionKeeper()
-
-			// run function under test
-			id, err := keeper.StartForwardAuction(ctx, tc.args.seller, tc.args.lot, tc.args.bidDenom)
-
-			// check
-			sk := tApp.GetSupplyKeeper()
-			liquidatorCoins := sk.GetModuleAccount(ctx, liquidator.ModuleName).GetCoins()
-			actualAuc, found := keeper.GetAuction(ctx, id)
-
-			if tc.expectPass {
-				require.NoError(t, err)
-				// check coins moved
-				require.Equal(t, initialLiquidatorCoins.Sub(cs(tc.args.lot)), liquidatorCoins)
-				// check auction in store and is correct
-				require.True(t, found)
-				expectedAuction := types.Auction(types.ForwardAuction{BaseAuction: types.BaseAuction{
-					ID:         0,
-					Initiator:  tc.args.seller,
-					Lot:        tc.args.lot,
-					Bidder:     nil,
-					Bid:        c(tc.args.bidDenom, 0),
-					EndTime:    tc.blockTime.Add(types.DefaultMaxAuctionDuration),
-					MaxEndTime: tc.blockTime.Add(types.DefaultMaxAuctionDuration),
-				}})
-				require.Equal(t, expectedAuction, actualAuc)
-			} else {
-				require.Error(t, err)
-				// check coins not moved
-				require.Equal(t, initialLiquidatorCoins, liquidatorCoins)
-				// check auction not in store
-				require.False(t, found)
-			}
-		})
-	}
+func TestForwardReverseAuctionBidding(t *testing.T) {
+	// TODO: Implement TestForwardReverseAuctionBidding with error edge cases
 }
