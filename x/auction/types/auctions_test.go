@@ -97,7 +97,6 @@ func TestNewWeightedAddresses(t *testing.T) {
 }
 
 func TestNewForwardAuction(t *testing.T) {
-	// TODO: Move to SetupTest
 	endTime := time.Now().Add(TestExtraEndTime)
 
 	// Create a new ForwardAuction
@@ -119,10 +118,7 @@ func TestNewForwardAuction(t *testing.T) {
 	// require.Equal(t, forwardAuctionWithID.ID, TestAuctionID)
 }
 
-// TODO: func TestAuctionGetID()
-
 func TestBaseAuctionGetters(t *testing.T) {
-	// TODO: Move to SetupTest
 	endTime := time.Now().Add(TestExtraEndTime)
 
 	// Create a new BaseAuction (via ForwardAuction)
@@ -144,11 +140,9 @@ func TestBaseAuctionGetters(t *testing.T) {
 }
 
 func TestNewReverseAuction(t *testing.T) {
-	// TODO: Move to SetupTest
 	endTime := time.Now().Add(TestExtraEndTime)
 
 	// Create a new ReverseAuction
-	// TODO: Edit NewReverseAuction so the params line up...
 	reverseAuction := NewReverseAuction(
 		TestInitiatorModuleName,
 		c(TestBidDenom, TestBidAmount),
@@ -178,7 +172,6 @@ func TestNewForwardReverseAuction(t *testing.T) {
 
 	weightedAddresses, _ := NewWeightedAddresses(addresses, weights)
 
-	// TODO: Move to SetupTest
 	endTime := time.Now().Add(TestExtraEndTime)
 
 	forwardReverseAuction := NewForwardReverseAuction(
