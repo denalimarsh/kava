@@ -23,6 +23,11 @@ func (k Keeper) CreateAtomicSwap(ctx sdk.Context, randomNumberHash []byte, times
 		return sdkerrors.Wrap(types.ErrAtomicSwapAlreadyExists, hex.EncodeToString(swapID))
 	}
 
+	// Cannot send coins to a module account
+	if k.Maccs[recipient.String()] {
+		return sdkerrors.Wrapf(sdkerrors.ErrUnauthorized, "%s is a module account", recipient)
+	}
+
 	// The heightSpan period should be more than 10 minutes and less than one week
 	// Assume average block time interval is 10 second. 10 mins = 60 blocks, 1 week = 60480 blocks
 	if heightSpan < k.GetMinBlockLock(ctx) || heightSpan > k.GetMaxBlockLock(ctx) {
@@ -62,13 +67,17 @@ func (k Keeper) CreateAtomicSwap(ctx sdk.Context, randomNumberHash []byte, times
 			newAcc := k.accountKeeper.NewAccountWithAddress(ctx, recipient)
 			k.accountKeeper.SetAccount(ctx, newAcc)
 		}
+		// Incoming swaps have already had their fees collected by the deputy during the relay process.
 		err = k.IncrementIncomingAssetSupply(ctx, amount[0])
 	case types.Outgoing:
+		// Amount in outgoing swaps must be greater than the deputy's fixed fee.
+		if amount[0].Amount.Uint64() <= k.GetBnbDeputyFixedFee(ctx) {
+			return sdkerrors.Wrap(types.ErrInsufficientAmount, amount[0].String())
+		}
 		err = k.IncrementOutgoingAssetSupply(ctx, amount[0])
 	default:
 		err = fmt.Errorf("invalid swap direction: %s", direction.String())
 	}
-
 	if err != nil {
 		return err
 	}
@@ -175,7 +184,7 @@ func (k Keeper) ClaimAtomicSwap(ctx sdk.Context, from sdk.AccAddress, swapID []b
 			sdk.NewAttribute(types.AttributeKeyRecipient, atomicSwap.Recipient.String()),
 			sdk.NewAttribute(types.AttributeKeyAtomicSwapID, hex.EncodeToString(atomicSwap.GetSwapID())),
 			sdk.NewAttribute(types.AttributeKeyRandomNumberHash, hex.EncodeToString(atomicSwap.RandomNumberHash)),
-			sdk.NewAttribute(types.AttributeKeyRandomNumber, string(randomNumber)),
+			sdk.NewAttribute(types.AttributeKeyRandomNumber, hex.EncodeToString(randomNumber)),
 		),
 	)
 

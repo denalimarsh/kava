@@ -24,6 +24,7 @@ type AtomicSwapTestSuite struct {
 	keeper             keeper.Keeper
 	app                app.TestApp
 	ctx                sdk.Context
+	randMacc           sdk.AccAddress
 	deputy             sdk.AccAddress
 	addrs              []sdk.AccAddress
 	timestamps         []int64
@@ -62,6 +63,20 @@ func (suite *AtomicSwapTestSuite) SetupTest() {
 	suite.deputy = deputy
 	suite.addrs = addrs
 	suite.keeper = suite.app.GetBep3Keeper()
+
+	// Load a random module account to test blacklisting
+	i := 0
+	var randModuleAcc sdk.AccAddress
+	for macc := range suite.keeper.Maccs {
+		if i == len(suite.keeper.Maccs)/2 {
+			acc, err := sdk.AccAddressFromBech32(macc)
+			suite.Nil(err)
+			randModuleAcc = acc
+		}
+		i = i + 1
+	}
+	suite.randMacc = randModuleAcc
+
 	suite.GenerateSwapDetails()
 }
 
@@ -142,11 +157,30 @@ func (suite *AtomicSwapTestSuite) TestCreateAtomicSwap() {
 			true,
 		},
 		{
-			"unsupported asset",
+
+			"outgoing swap amount not greater than fixed fee",
 			currentTmTime,
 			args{
 				randomNumberHash:    suite.randomNumberHashes[1],
 				timestamp:           suite.timestamps[1],
+				heightSpan:          uint64(360),
+				sender:              suite.addrs[1],
+				recipient:           suite.addrs[2],
+				senderOtherChain:    TestSenderOtherChain,
+				recipientOtherChain: TestRecipientOtherChain,
+				coins:               cs(c(BNB_DENOM, int64(suite.keeper.GetBnbDeputyFixedFee(suite.ctx)))),
+				crossChain:          true,
+				direction:           types.Outgoing,
+			},
+			false,
+			false,
+		},
+		{
+			"unsupported asset",
+			currentTmTime,
+			args{
+				randomNumberHash:    suite.randomNumberHashes[2],
+				timestamp:           suite.timestamps[2],
 				heightSpan:          uint64(360),
 				sender:              suite.deputy,
 				recipient:           suite.addrs[2],
@@ -160,11 +194,11 @@ func (suite *AtomicSwapTestSuite) TestCreateAtomicSwap() {
 			false,
 		},
 		{
-			"past timestamp",
+			"outside timestamp range",
 			currentTmTime,
 			args{
-				randomNumberHash:    suite.randomNumberHashes[2],
-				timestamp:           suite.timestamps[2] - 2000,
+				randomNumberHash:    suite.randomNumberHashes[3],
+				timestamp:           suite.timestamps[3] - 2000,
 				heightSpan:          uint64(360),
 				sender:              suite.deputy,
 				recipient:           suite.addrs[3],
@@ -181,8 +215,8 @@ func (suite *AtomicSwapTestSuite) TestCreateAtomicSwap() {
 			"future timestamp",
 			currentTmTime,
 			args{
-				randomNumberHash:    suite.randomNumberHashes[3],
-				timestamp:           suite.timestamps[3] + 5000,
+				randomNumberHash:    suite.randomNumberHashes[4],
+				timestamp:           suite.timestamps[4] + 5000,
 				heightSpan:          uint64(360),
 				sender:              suite.deputy,
 				recipient:           suite.addrs[4],
@@ -199,8 +233,8 @@ func (suite *AtomicSwapTestSuite) TestCreateAtomicSwap() {
 			"small height span",
 			currentTmTime,
 			args{
-				randomNumberHash:    suite.randomNumberHashes[4],
-				timestamp:           suite.timestamps[4],
+				randomNumberHash:    suite.randomNumberHashes[5],
+				timestamp:           suite.timestamps[5],
 				heightSpan:          uint64(5),
 				sender:              suite.deputy,
 				recipient:           suite.addrs[5],
@@ -217,8 +251,8 @@ func (suite *AtomicSwapTestSuite) TestCreateAtomicSwap() {
 			"big height span",
 			currentTmTime,
 			args{
-				randomNumberHash:    suite.randomNumberHashes[5],
-				timestamp:           suite.timestamps[5],
+				randomNumberHash:    suite.randomNumberHashes[6],
+				timestamp:           suite.timestamps[6],
 				heightSpan:          uint64(1000000),
 				sender:              suite.deputy,
 				recipient:           suite.addrs[6],
@@ -235,8 +269,8 @@ func (suite *AtomicSwapTestSuite) TestCreateAtomicSwap() {
 			"zero amount",
 			currentTmTime,
 			args{
-				randomNumberHash:    suite.randomNumberHashes[6],
-				timestamp:           suite.timestamps[6],
+				randomNumberHash:    suite.randomNumberHashes[7],
+				timestamp:           suite.timestamps[7],
 				heightSpan:          uint64(360),
 				sender:              suite.deputy,
 				recipient:           suite.addrs[7],
@@ -266,6 +300,24 @@ func (suite *AtomicSwapTestSuite) TestCreateAtomicSwap() {
 			},
 			false,
 			true,
+		},
+		{
+			"recipient is module account",
+			currentTmTime,
+			args{
+				randomNumberHash:    suite.randomNumberHashes[8],
+				timestamp:           suite.timestamps[8],
+				heightSpan:          uint64(360),
+				sender:              suite.deputy,
+				recipient:           suite.randMacc,
+				senderOtherChain:    TestSenderOtherChain,
+				recipientOtherChain: TestRecipientOtherChain,
+				coins:               cs(c(BNB_DENOM, 5000)),
+				crossChain:          true,
+				direction:           types.Incoming,
+			},
+			false,
+			false,
 		},
 	}
 
@@ -605,7 +657,7 @@ func (suite *AtomicSwapTestSuite) TestRefundAtomicSwap() {
 			}
 
 			err := suite.keeper.CreateAtomicSwap(suite.ctx, suite.randomNumberHashes[i], suite.timestamps[i],
-				uint64(360), sender, suite.addrs[8], TestSenderOtherChain, TestRecipientOtherChain,
+				uint64(360), sender, suite.addrs[9], TestSenderOtherChain, TestRecipientOtherChain,
 				expectedRefundAmount, true)
 			suite.NoError(err)
 

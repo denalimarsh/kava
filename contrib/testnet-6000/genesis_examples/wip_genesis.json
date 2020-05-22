@@ -1,6 +1,6 @@
 {
   "genesis_time": "2020-04-23T16:32:31.393515Z",
-  "chain_id": "testing",
+  "chain_id": "kava-testnet-6000",
   "consensus_params": {
     "block": {
       "max_bytes": "22020096",
@@ -47,7 +47,8 @@
       "assets_supplies": [],
       "atomic_swaps": [],
       "params": {
-        "bnb_deputy_address": "kava1xy7hrjy9r0algz9w3gzm8u6mrpq97kwta747gj",
+        "bnb_deputy_address": "kava1tfvn5t8qwngqd2q427za2mel48pcus3z9u73fl",
+        "bnb_deputy_fixed_fee": "1000",
         "max_block_lock": "600",
         "min_block_lock": "80",
         "supported_assets": [
@@ -55,7 +56,7 @@
             "active": true,
             "coin_id": "714",
             "denom": "bnb",
-            "limit": "100000000000"
+            "limit": "10000000000000"
           }
         ]
       }
@@ -72,9 +73,9 @@
             "auction_size": "50000000000",
             "conversion_factor": "8",
             "debt_limit": {
-                "amount": "2000000000000",
-                "denom": "usdx"
-              },
+              "amount": "2000000000000",
+              "denom": "usdx"
+            },
             "denom": "bnb",
             "liquidation_penalty": "0.05",
             "liquidation_ratio": "1.5",
@@ -85,22 +86,22 @@
         ],
         "debt_auction_threshold": "10000000000",
         "debt_param": {
-            "conversion_factor": "6",
-            "debt_floor": "10000000",
-            "debt_limit": [
-              {
-                "amount": "2000000000000",
-                "denom": "usdx"
-              }
-            ],
-            "denom": "usdx",
-            "reference_asset": "usd",
-            "savings_rate": "0.95"
-          },
+          "conversion_factor": "6",
+          "debt_floor": "10000000",
+          "debt_limit": [
+            {
+              "amount": "2000000000000",
+              "denom": "usdx"
+            }
+          ],
+          "denom": "usdx",
+          "reference_asset": "usd",
+          "savings_rate": "0.95"
+        },
         "global_debt_limit": {
-            "amount": "2000000000000",
-            "denom": "usdx"
-          },
+          "amount": "2000000000000",
+          "denom": "usdx"
+        },
         "savings_distribution_frequency": "120000000000",
         "surplus_auction_threshold": "1000000000"
       },
@@ -110,7 +111,138 @@
     },
     "committee": {
       "next_proposal_id": "1",
-      "committees": [],
+      "committees": [
+        {
+          "id": "0",
+          "description": "This committee is for adjusting parameters of the cdp system.",
+          "members": [
+            "kava109fpwjvq6un86tw8f8emav2l0e0dha924scrj9"
+          ],
+          "permissions": [
+            {
+              "type": "kava/SubParamChangePermission",
+              "value": {
+                "allowed_params": [
+                  {
+                    "subspace": "cdp",
+                    "key": "GlobalDebtLimit"
+                  },
+                  {
+                    "subspace": "cdp",
+                    "key": "SurplusThreshold"
+                  },
+                  {
+                    "subspace": "cdp",
+                    "key": "DebtThreshold"
+                  },
+                  {
+                    "subspace": "cdp",
+                    "key": "DistributionFrequency"
+                  },
+                  {
+                    "subspace": "cdp",
+                    "key": "CircuitBreaker"
+                  },
+                  {
+                    "subspace": "cdp",
+                    "key": "CollateralParams"
+                  },
+                  {
+                    "subspace": "cdp",
+                    "key": "DebtParam"
+                  },
+                  {
+                    "subspace": "auction",
+                    "key": "BidDuration"
+                  },
+                  {
+                    "subspace": "auction",
+                    "key": "IncrementSurplus"
+                  },
+                  {
+                    "subspace": "auction",
+                    "key": "IncrementDebt"
+                  },
+                  {
+                    "subspace": "auction",
+                    "key": "IncrementCollateral"
+                  },
+                  {
+                    "subspace": "bep3",
+                    "key": "SupportedAssets"
+                  },
+                  {
+                    "subspace": "pricefeed",
+                    "key": "Markets"
+                  },
+                  {
+                    "subspace": "incentive",
+                    "key": "Active"
+                  },
+                  {
+                    "subspace": "kavadist",
+                    "key": "Active"
+                  }
+                ],
+                "allowed_collateral_params": [
+                  {
+                    "denom": "bnb",
+                    "liquidation_ratio": false,
+                    "debt_limit": true,
+                    "stability_fee": true,
+                    "auction_size": true,
+                    "liquidation_penalty": false,
+                    "prefix": false,
+                    "market_id": false,
+                    "conversion_factor": false
+                  }
+                ],
+                "allowed_debt_param": {
+                  "denom": false,
+                  "reference_asset": false,
+                  "conversion_factor": false,
+                  "debt_floor": false,
+                  "savings_rate": true
+                },
+                "allowed_asset_params": [
+                  {
+                    "denom": "bnb",
+                    "coin_id": false,
+                    "limit": true,
+                    "active": true
+                  }
+                ],
+                "allowed_markets": [
+                  {
+                    "market_id": "bnb:usd",
+                    "base_asset": false,
+                    "quote_asset": false,
+                    "oracles": false,
+                    "active": true
+                  }
+                ]
+              }
+            }
+          ],
+          "vote_threshold": "0.750000000000000000",
+          "proposal_duration": "604800000000000"
+        },
+        {
+          "id": "1",
+          "description": "This committee is for testnet",
+          "members": [
+            "kava109fpwjvq6un86tw8f8emav2l0e0dha924scrj9"
+          ],
+          "permissions": [
+            {
+              "type": "kava/GodPermission",
+              "value": {}
+            }
+          ],
+          "vote_threshold": "0.750000000000000000",
+          "proposal_duration": "604800000000000"
+        }
+      ],
       "proposals": [],
       "votes": []
     },
@@ -178,8 +310,7 @@
           {
             "active": true,
             "denom": "bnb",
-            "available_rewards":
-            {
+            "available_rewards": {
               "amount": "50000000000",
               "denom": "ukava"
             },
@@ -189,7 +320,7 @@
           }
         ]
       },
-    "previous_block_time": "1970-01-01T00:00:00Z"
+      "previous_block_time": "1970-01-01T00:00:00Z"
     },
     "kavadist": {
       "params": {
@@ -227,7 +358,8 @@
             "base_asset": "bnb",
             "market_id": "bnb:usd",
             "oracles": [
-              "kava15qdefkmwswysgg4qxgqpqr35k3m49pkx2jdfnw"
+              "kava1nyqy04x3ecpcuss3llmyu4fc2v4ma99h8vffjz",
+              "kava1znuktqgtjr8g85tetu2wt9wd33gstqr7pad92h"
             ],
             "quote_asset": "usd"
           }
@@ -235,10 +367,10 @@
       },
       "posted_prices": [
         {
-          "expiry": "2021-04-20T00:00:00Z",
+          "expiry": "2021-06-20T00:00:00Z",
           "market_id": "bnb:usd",
-          "oracle_address": "kava15qdefkmwswysgg4qxgqpqr35k3m49pkx2jdfnw",
-          "price": "12.2639061184"
+          "oracle_address": "kava1znuktqgtjr8g85tetu2wt9wd33gstqr7pad92h",
+          "price": "15.929061184"
         }
       ]
     },
